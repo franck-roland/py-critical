@@ -69,12 +69,19 @@ g.conceptG circle{
     stroke-width: 2px;
 }
 
+g.conceptG.critical circle{
+    fill: rgb(150, 0, 0);
+}
+
 g.conceptG:hover circle{
     fill: rgb(200, 238, 241);
 }
 
 g.selected circle{
     fill: rgb(250, 232, 255);
+}
+g.selected.critical circle{
+    fill: rgb(224, 0, 0);
 }
 g.selected:hover circle{
     fill: rgb(250, 232, 255);

@@ -1,3 +1,5 @@
+
+
 document.onload = (function(d3, saveAs, Blob, undefined){
   "use strict";
 
@@ -79,6 +81,24 @@ document.onload = (function(d3, saveAs, Blob, undefined){
             // todo check if edge-mode is selected
           });
 
+    thisGraph.setTaskD3Circle = function(d3Selection) {
+      console.log(d3Selection);
+      d3Selection.each(function(){
+        for (var i in thisGraph.nodes) {
+          if (thisGraph.nodes[i].id == d3.select(this).attr('node-id')) {
+            thisGraph.nodes[i].d3Node = d3.select(this);
+          }
+        }
+      })
+      /*if (this[0][0]) {
+        for (var i in thisGraph.nodes) {
+          if (thisGraph.nodes[i].id == this.attr('node-id')) {
+            thisGraph.nodes[i].d3Node = this;
+          }
+        }
+      }*/
+    }
+
     // listen for key events
     d3.select(window).on("keydown", function(){
       thisGraph.svgKeyDown.call(thisGraph);
@@ -144,16 +164,7 @@ document.onload = (function(d3, saveAs, Blob, undefined){
             thisGraph.deleteGraph(true);
             thisGraph.nodes = jsonObj.nodes;
             for (var i in thisGraph.nodes) {
-              thisGraph.nodes[i].early_start_date = new Date(thisGraph.nodes[i].early_start_date);
-              thisGraph.nodes[i].early_finish_date = new Date(thisGraph.nodes[i].early_finish_date);
-              thisGraph.nodes[i].late_start_date = new Date(thisGraph.nodes[i].late_start_date);
-              thisGraph.nodes[i].late_finish_date = new Date(thisGraph.nodes[i].late_finish_date);
-              if (thisGraph.nodes[i].start_date) {
-                thisGraph.nodes[i].start_date = new Date(thisGraph.nodes[i].start_date);
-              }
-              if (thisGraph.nodes[i].effective_finish_date) {
-                thisGraph.nodes[i].effective_finish_date = new Date(thisGraph.nodes[i].effective_finish_date);
-              }
+              thisGraph.nodes[i] = critical.Task.load(thisGraph.nodes[i]);
             }
             thisGraph.setIdCt(jsonObj.nodes.length + 1);
             var newEdges = jsonObj.edges;
@@ -306,6 +317,7 @@ document.onload = (function(d3, saveAs, Blob, undefined){
     }
 
     var prevEdge = state.selectedEdge;
+
     if (!prevEdge || prevEdge !== d){
       thisGraph.replaceSelectEdge(d3path, d);
     } else{
@@ -329,7 +341,7 @@ document.onload = (function(d3, saveAs, Blob, undefined){
     d3Details.append('input').attr('value', d.duration).attr('type', 'number').on('change', function(){
       for (var i in thisGraph.nodes) {
         if (thisGraph.nodes[i].id == d.id) {
-          thisGraph.nodes[i].duration = this.value;
+          thisGraph.nodes[i].setDuration(Number(this.value));
         }
       }
     });
@@ -417,6 +429,10 @@ document.onload = (function(d3, saveAs, Blob, undefined){
       });
       if (!filtRes[0].length){
         thisGraph.edges.push(newEdge);
+        newEdge.source.addSuccessor(newEdge.target);
+        newEdge.target.addPredecessor(newEdge.source);
+        newEdge.source.update();
+        newEdge.target.update();
         thisGraph.updateGraph();
       }
     } else{
@@ -465,32 +481,15 @@ document.onload = (function(d3, saveAs, Blob, undefined){
       state.justScaleTransGraph = false;
     } else if (state.graphMouseDown && d3.event.shiftKey){
       // clicked not dragged from svg
-      var xycoords = d3.mouse(thisGraph.svgG.node()),
-          d = {id: thisGraph.idct++,
-            title: consts.defaultTitle,
-            x: xycoords[0],
-            y: xycoords[1],
-            start_date: new Date(),
-            early_start: 0,
-            early_start_date: new Date(),
-            early_finish: 0,
-            early_finish_date: new Date(),
-            late_start: 0,
-            late_start_date: new Date(),
-            late_finish: 0,
-            late_finish_date: new Date(),
-            effective_finish: 0,
-            effective_finish_date: null,
-            duration: 0,
-            error: 0,
-            tag: ""
-          };
-      thisGraph.nodes.push(d);
+      var node = thisGraph.svgG.node();
+      var xycoords = d3.mouse(node);
+      var task = new critical.Task(thisGraph.idct++, consts.defaultTitle, xycoords[0], xycoords[1], 0, "");
+      thisGraph.nodes.push(task);
       thisGraph.updateGraph();
       // make title of text immediently editable
       var d3txt = thisGraph.changeTextOfNode(thisGraph.circles.filter(function(dval){
-        return dval.id === d.id;
-      }), d),
+        return dval.id === task.id;
+      }), task),
           txtNode = d3txt.node();
       thisGraph.selectElementContents(txtNode);
       txtNode.focus();
@@ -515,7 +514,6 @@ document.onload = (function(d3, saveAs, Blob, undefined){
         selectedEdge = state.selectedEdge;
 
     switch(d3.event.keyCode) {
-    case consts.BACKSPACE_KEY:
     case consts.DELETE_KEY:
       d3.event.preventDefault();
       if (selectedNode){
@@ -585,6 +583,7 @@ document.onload = (function(d3, saveAs, Blob, undefined){
 
     newGs.classed(consts.circleGClass, true)
       .attr("transform", function(d){return "translate(" + d.x + "," + d.y + ")";})
+      .attr("node-id", function(d){return d.id;})
       .on("mouseover", function(d){
         if (state.shiftNodeDrag){
           d3.select(this).classed(consts.connectClass, true);
@@ -599,7 +598,9 @@ document.onload = (function(d3, saveAs, Blob, undefined){
       .on("mouseup", function(d){
         thisGraph.circleMouseUp.call(thisGraph, d3.select(this), d);
       })
-      .call(thisGraph.drag);
+      .call(thisGraph.drag)
+      .call(thisGraph.setTaskD3Circle)
+    ;
 
     newGs.append("circle")
       .attr("r", String(consts.nodeRadius));
